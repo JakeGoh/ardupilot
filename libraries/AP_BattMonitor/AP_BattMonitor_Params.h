@@ -58,4 +58,16 @@ public:
     AP_Int32 _arming_minimum_capacity;  /// capacity level required to arm
     AP_Float _arming_minimum_voltage;   /// voltage level required to arm
     AP_Int8  _i2c_bus;                  /// I2C bus number
+    AP_Float _Batt100;                  /// Batt 100 Percent
+    AP_Float _Batt090;                  /// Batt 100 Percent
+    AP_Float _Batt080;                  /// Batt 100 Percent
+    AP_Float _Batt070;                  /// Batt 100 Percent
+    AP_Float _Batt060;                  /// Batt 100 Percent
+    AP_Float _Batt050;                  /// Batt 100 Percent
+    AP_Float _Batt040;                  /// Batt 100 Percent
+    AP_Float _Batt030;                  /// Batt 100 Percent
+    AP_Float _Batt020;                  /// Batt 100 Percent
+    AP_Float _Batt010;                  /// Batt 100 Percent
+    AP_Float _Batt000;                  /// Batt 100 Percent
+
 };
