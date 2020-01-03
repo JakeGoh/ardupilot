@@ -104,6 +104,15 @@ const AP_Param::GroupInfo AC_PrecLand::var_info[] = {
     // @RebootRequired: True
     AP_GROUPINFO("LAG", 9, AC_PrecLand, _lag, 0.02f), // 20ms is the old default buffer size (8 frames @ 400hz/2.5ms)
 
+    
+    // @Param: IRSCALE
+    // @DisplayName: IRSCALE
+    // @Description: IRSCALE
+    // @Values: 1.0 , 100000
+    // @User: Advanced
+    AP_GROUPINFO("IRSCALE",    10, AC_PrecLand, _irscale, 1.0f),
+    
+
     AP_GROUPEND
 };
 
@@ -371,7 +380,14 @@ bool AC_PrecLand::retrieve_los_meas(Vector3f& target_vec_unit_body)
             0, 0, 1
         );
 
-        target_vec_unit_body = Rz*target_vec_unit_body;
+        // IR Scaling matrix vector
+        Matrix3f Rw =  Matrix3f(
+            _irscale, 0 , 0,
+            0, _irscale , 0,
+               0 , 0 , 1
+        );
+
+        target_vec_unit_body = Rz * (target_vec_unit_body * Rw);
         return true;
     } else {
         return false;
