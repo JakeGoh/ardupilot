@@ -31,11 +31,52 @@ AP_BattMonitor_Backend::AP_BattMonitor_Backend(AP_BattMonitor &mon, AP_BattMonit
 }
 
 /// capacity_remaining_pct - returns the % battery capacity remaining (0 ~ 100)
-uint8_t AP_BattMonitor_Backend::capacity_remaining_pct() const
+uint8_t AP_BattMonitor_Backend::capacity_remaining_pct()
 {
-    float mah_remaining = _params._pack_capacity - _state.consumed_mah;
+    if (!_battboot && _state.voltage > 7.0f){
+        _battboot = true;
+        
+
+        if (_state.voltage > _params._Batt100){
+            _newcap = _params._pack_capacity ;
+        }
+        if (_state.voltage <= _params._Batt100 && _state.voltage > _params._Batt090){
+            _newcap = (_params._pack_capacity/100) * 90 ;
+        }
+        if (_state.voltage <= _params._Batt090 && _state.voltage > _params._Batt080){
+            _newcap = (_params._pack_capacity/100) * 80 ;
+        }
+        if (_state.voltage <= _params._Batt080 && _state.voltage > _params._Batt070){
+            _newcap = (_params._pack_capacity/100) * 70 ;
+        }
+        if (_state.voltage <= _params._Batt070 && _state.voltage > _params._Batt060){
+            _newcap = (_params._pack_capacity/100) * 60 ;
+        }
+        if (_state.voltage <= _params._Batt060 && _state.voltage > _params._Batt050){
+            _newcap = (_params._pack_capacity/100) * 50 ;
+        }
+        if (_state.voltage <= _params._Batt050 && _state.voltage > _params._Batt040){
+            _newcap = (_params._pack_capacity/100) * 40 ;
+        }
+        if (_state.voltage <= _params._Batt040 && _state.voltage > _params._Batt030){
+            _newcap = (_params._pack_capacity/100) * 30 ;
+        }
+        if (_state.voltage <= _params._Batt030 && _state.voltage > _params._Batt020){
+            _newcap = (_params._pack_capacity/100) * 20 ;
+        }
+        if (_state.voltage <= _params._Batt020 && _state.voltage > _params._Batt010){
+            _newcap = (_params._pack_capacity/100) * 10 ;
+        }
+        if (_state.voltage < _params._Batt010){
+            _newcap = (_params._pack_capacity/100) * 0 ;
+        }
+
+
+
+    }
+    float mah_remaining = _newcap - _state.consumed_mah;
     if ( _params._pack_capacity > 10 ) { // a very very small battery
-        return MIN(MAX((100 * (mah_remaining) / _params._pack_capacity), 0), UINT8_MAX);
+        return (100 * (mah_remaining) / _params._pack_capacity);
     } else {
         return 0;
     }
