@@ -44,7 +44,7 @@ public:
     virtual bool has_cell_voltages() const { return false; }
 
     /// capacity_remaining_pct - returns the % battery capacity remaining (0 ~ 100)
-    uint8_t capacity_remaining_pct() const;
+    uint8_t capacity_remaining_pct();
 
     // return true if cycle count can be provided and fills in cycles argument
     virtual bool get_cycle_count(uint16_t &cycles) const { return false; }
@@ -81,4 +81,7 @@ private:
     float       _current_filt_amps;      // filtered current
     float       _resistance_voltage_ref; // voltage used for maximum resistance calculation
     float       _resistance_current_ref; // current used for maximum resistance calculation
+    bool        _battboot = false;               // batt first read
+    float       _newcap;                 // newly updated capacity
+
 };
