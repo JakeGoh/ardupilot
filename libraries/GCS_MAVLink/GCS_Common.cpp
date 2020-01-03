@@ -78,6 +78,8 @@ uint32_t GCS_MAVLINK::reserve_param_space_start_ms;
 // private channels are ones used for point-to-point protocols, and
 // don't get broadcasts or fwded packets
 uint8_t GCS_MAVLINK::mavlink_private = 0;
+int16_t probe = 0.0;
+bool pinit = true;
 
 GCS *GCS::_singleton = nullptr;
 
@@ -282,6 +284,83 @@ void GCS_MAVLINK::send_distance_sensor(const AP_RangeFinder_Backend *sensor, con
 // proximity sensor ones.
 void GCS_MAVLINK::send_distance_sensor() const
 {
+    
+
+     //////////////////////////////////////////////////
+    /////// FOR TRITEX PROBE READING TO SERIAL////////
+    //////////////////////////////////////////////////
+
+    //TRITEX initialisationn
+    if(pinit==true){
+        hal.uartE->begin(38400); // this sets up uartE with a buadrate of 38400 for TRITEX PROBE
+        pinit=false;
+    }
+
+    char buff[10] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+    uint16_t buff_len = 0;   
+        // read any available characters in the serial buffer
+    int16_t nbytes = hal.uartE->available();
+
+    while (nbytes-- > 0) {
+        int16_t p = hal.uartE->read();
+        if (p < 0) {
+            continue;
+        }
+      
+    
+        buff[buff_len++] = p;
+
+        //initializer for TRITEX Probe
+        if (buff[1] == 0x69){
+           hal.uartE->printf("Ja000"); 
+        } 
+
+        for (int i = 0; i < 6; ++i){
+            if(buff[i] < 48 || buff[i] > 57){
+                buff[i] = 48;
+            }
+        }
+        // hal.uartC->printf("val = %d \n", p);
+        
+        probe = atoi(buff); 
+
+        if (probe < 0 || probe > 10000){
+            probe = 0;
+        }   
+
+
+        
+    }
+
+
+	    
+    mavlink_msg_distance_sensor_send(
+        chan,
+        AP_HAL::millis(),                        // time since system boot TODO: take time of measurement
+        20,                                      // minimum distance the sensor can measure in centimeters
+        25000,                                   // maximum distance the sensor can measure in centimeters
+        probe,                                   // current distance reading
+        4,                                       // type from MAV_DISTANCE_SENSOR enum
+        0,                                       // onboard ID of the sensor == instance
+        0,                                       // direction the sensor faces from MAV_SENSOR_ORIENTATION enum
+        0,                                       // Measurement covariance in centimeters, 0 for unknown / invalid readings
+        0,                                       // horizontal FOV
+        0,                                       // vertical FOV
+        (const float *)nullptr);                 // quaternion of sensor orientation for MAV_SENSOR_ROTATION_CUSTOM
+
+ 
+    AP::logger().Write("TRTX", "TimeUS,Prb",
+               "sm", // units: seconds, meters
+               "F1", // mult: 1e-6, 1e-1
+               "Qf", // format: uint64_t, float
+               AP_HAL::micros64(),
+               (double)probe);
+
+
+    ///////////////////////////////////////////////////////////////////////////////
+    ///////////END OF TRITEX PROBE SERIAL FUNCTION/////////////////////////////////
+    ///////////////////////////////////////////////////////////////////////////////
+
     RangeFinder *rangefinder = RangeFinder::get_singleton();
     if (rangefinder == nullptr) {
         return;
