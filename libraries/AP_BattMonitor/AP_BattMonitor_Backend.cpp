@@ -17,6 +17,7 @@
 #include <AP_HAL/AP_HAL.h>
 #include "AP_BattMonitor.h"
 #include "AP_BattMonitor_Backend.h"
+#include <AP_Logger/AP_Logger.h>
 
 /*
   base class constructor.
@@ -40,34 +41,37 @@ uint8_t AP_BattMonitor_Backend::capacity_remaining_pct()
         if (_state.voltage > _params._Batt100){
             _newcap = _params._pack_capacity ;
         }
-        if (_state.voltage <= _params._Batt100 && _state.voltage > _params._Batt090){
-            _newcap = (_params._pack_capacity/100) * 90 ;
+        if (_state.voltage <= _params._Batt100 && _state.voltage > _params._Batt094){
+            _newcap = (_params._pack_capacity/100) * 94.874021f ;
         }
-        if (_state.voltage <= _params._Batt090 && _state.voltage > _params._Batt080){
-            _newcap = (_params._pack_capacity/100) * 80 ;
+        if (_state.voltage <= _params._Batt094 && _state.voltage > _params._Batt079){
+            _newcap = (_params._pack_capacity/100) * 79.496082f ;
         }
-        if (_state.voltage <= _params._Batt080 && _state.voltage > _params._Batt070){
-            _newcap = (_params._pack_capacity/100) * 70 ;
+        if (_state.voltage <= _params._Batt079 && _state.voltage > _params._Batt066){
+            _newcap = (_params._pack_capacity/100) * 66.681133f ;
         }
-        if (_state.voltage <= _params._Batt070 && _state.voltage > _params._Batt060){
-            _newcap = (_params._pack_capacity/100) * 60 ;
+        if (_state.voltage <= _params._Batt066 && _state.voltage > _params._Batt053){
+            _newcap = (_params._pack_capacity/100) * 53.866185f ;
         }
-        if (_state.voltage <= _params._Batt060 && _state.voltage > _params._Batt050){
-            _newcap = (_params._pack_capacity/100) * 50 ;
+        if (_state.voltage <= _params._Batt053 && _state.voltage > _params._Batt038){
+            _newcap = (_params._pack_capacity/100) * 38.488246f ;
         }
-        if (_state.voltage <= _params._Batt050 && _state.voltage > _params._Batt040){
-            _newcap = (_params._pack_capacity/100) * 40 ;
-        }
-        if (_state.voltage <= _params._Batt040 && _state.voltage > _params._Batt030){
-            _newcap = (_params._pack_capacity/100) * 30 ;
-        }
-        if (_state.voltage <= _params._Batt030 && _state.voltage > _params._Batt020){
-            _newcap = (_params._pack_capacity/100) * 20 ;
+        if (_state.voltage <= _params._Batt038 && _state.voltage > _params._Batt020){
+            _newcap = (_params._pack_capacity/100) * 20.547318f ;
         }
         if (_state.voltage <= _params._Batt020 && _state.voltage > _params._Batt010){
-            _newcap = (_params._pack_capacity/100) * 10 ;
+            _newcap = (_params._pack_capacity/100) * 10.295359f ;
         }
-        if (_state.voltage < _params._Batt010){
+        if (_state.voltage <= _params._Batt010 && _state.voltage > _params._Batt007){
+            _newcap = (_params._pack_capacity/100) * 7.7323696f ;
+        }
+        if (_state.voltage <= _params._Batt007 && _state.voltage > _params._Batt005){
+            _newcap = (_params._pack_capacity/100) * 5.1693798f ;
+        }
+        if (_state.voltage <= _params._Batt005 && _state.voltage > _params._Batt002){
+            _newcap = (_params._pack_capacity/100) * 2.6063901f ;
+        }
+        if (_state.voltage < _params._Batt002){
             _newcap = (_params._pack_capacity/100) * 0 ;
         }
 
@@ -76,6 +80,15 @@ uint8_t AP_BattMonitor_Backend::capacity_remaining_pct()
     }
     float mah_remaining = _newcap - _state.consumed_mah;
     if ( _params._pack_capacity > 10 ) { // a very very small battery
+
+
+        AP::logger().Write("BMAH", "TimeUS,mah",
+               "s#", // units: seconds, instance
+               "F1", // mult: 1e-6, 1e-1
+               "Qf", // format: uint64_t, float
+               AP_HAL::micros64(),
+               (double)_state.consumed_mah);
+
         return (100 * (mah_remaining) / _params._pack_capacity);
     } else {
         return 0;

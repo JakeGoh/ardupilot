@@ -59,15 +59,16 @@ public:
     AP_Float _arming_minimum_voltage;   /// voltage level required to arm
     AP_Int8  _i2c_bus;                  /// I2C bus number
     AP_Float _Batt100;                  /// Batt 100 Percent
-    AP_Float _Batt090;                  /// Batt 100 Percent
-    AP_Float _Batt080;                  /// Batt 100 Percent
-    AP_Float _Batt070;                  /// Batt 100 Percent
-    AP_Float _Batt060;                  /// Batt 100 Percent
-    AP_Float _Batt050;                  /// Batt 100 Percent
-    AP_Float _Batt040;                  /// Batt 100 Percent
-    AP_Float _Batt030;                  /// Batt 100 Percent
-    AP_Float _Batt020;                  /// Batt 100 Percent
-    AP_Float _Batt010;                  /// Batt 100 Percent
-    AP_Float _Batt000;                  /// Batt 100 Percent
+    AP_Float _Batt094;                  /// Batt 94.874021f Percent
+    AP_Float _Batt079;                  /// Batt 79.496082f Percent
+    AP_Float _Batt066;                  /// Batt 66.681133f Percent
+    AP_Float _Batt053;                  /// Batt 53.866185f Percent
+    AP_Float _Batt038;                  /// Batt 38.488246f Percent
+    AP_Float _Batt020;                  /// Batt 20.547318f Percent
+    AP_Float _Batt010;                  /// Batt 10.295359f Percent
+    AP_Float _Batt007;                  /// Batt 7.7323696f Percent
+    AP_Float _Batt005;                  /// Batt 5.1693798f Percent
+    AP_Float _Batt002;                  /// Batt 2.6063901f Percent
+    AP_Float _Batt000;                  /// Batt 0 Percent
 
 };

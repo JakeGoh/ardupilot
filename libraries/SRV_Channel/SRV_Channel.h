@@ -239,6 +239,7 @@ private:
     AP_Int8 function;
     float rate;
     AP_Int8 pwmout;
+    AP_Int8 pwmrate;
 
     // a pending output value as PWM
     uint16_t output_pwm;

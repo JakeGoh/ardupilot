@@ -61,7 +61,7 @@ void SRV_Channel::output_ch(void)
                         if (pwmout >= 1){
                          float sum = output_pwm - 1000.0f;
 
-                        output_pwm = sum * 1000 * (1/rate);
+                        output_pwm = sum * 1000 * (1/pwmrate);
                     }
             }
         }
@@ -188,7 +188,7 @@ void SRV_Channels::enable_aux_servos()
             hal.rcout->enable_ch(c.ch_num);
         }
 
-            c.rate = _singleton->default_rate.get();
+        //    c.rate = _singleton->default_rate.get();
         /*
           for channels which have been marked as digital output then the
           MIN/MAX/TRIM values have no meaning for controlling output, as

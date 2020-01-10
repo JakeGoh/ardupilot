@@ -174,78 +174,85 @@ const AP_Param::GroupInfo AP_BattMonitor_Params::var_info[] = {
     // @Description: Battery Look Up Table for Percentage
     // @units: Percentage
     // @User: Advanced
-    AP_GROUPINFO("PCT100", 21, AP_BattMonitor_Params, _Batt100, 0),
+    AP_GROUPINFO("PCT100", 21, AP_BattMonitor_Params, _Batt100, 16.4),
  
-    // @Param: BattPCT_90
+    // @Param: BattPCT_094
     // @DisplayName: BLUtable
     // @Description: Battery Look Up Table for Percentage
     // @units: Percentage
     // @User: Advanced
-    AP_GROUPINFO("PCT090", 22, AP_BattMonitor_Params, _Batt090, 0),
+    AP_GROUPINFO("PCT094", 22, AP_BattMonitor_Params, _Batt094, 16.146968),
 
-    // @Param: BattPCT_80
+    // @Param: BattPCT_079
     // @DisplayName: BLUtable
     // @Description: Battery Look Up Table for Percentage
     // @units: Percentage
     // @User: Advanced
-    AP_GROUPINFO("PCT080", 23, AP_BattMonitor_Params, _Batt080, 0),
+    AP_GROUPINFO("PCT079", 23, AP_BattMonitor_Params, _Batt079, 15.662074),
 
-    // @Param: BattPCT_70
+    // @Param: BattPCT_066
     // @DisplayName: BLUtable
     // @Description: Battery Look Up Table for Percentage
     // @units: Percentage
     // @User: Advanced
-    AP_GROUPINFO("PCT070", 24, AP_BattMonitor_Params, _Batt070, 0),
+    AP_GROUPINFO("PCT066", 24, AP_BattMonitor_Params, _Batt066, 15.340984),
 
-    // @Param: BattPCT_60
+    // @Param: BattPCT_053
     // @DisplayName: BLUtable
     // @Description: Battery Look Up Table for Percentage
     // @units: Percentage
     // @User: Advanced
-    AP_GROUPINFO("PCT060", 25, AP_BattMonitor_Params, _Batt060, 0),
+    AP_GROUPINFO("PCT053", 25, AP_BattMonitor_Params, _Batt053, 15.096672),
 
-    // @Param: BattPCT_50
+    // @Param: BattPCT_038
     // @DisplayName: BLUtable
     // @Description: Battery Look Up Table for Percentage
     // @units: Percentage
     // @User: Advanced
-    AP_GROUPINFO("PCT050", 26, AP_BattMonitor_Params, _Batt050, 0),
+    AP_GROUPINFO("PCT038", 26, AP_BattMonitor_Params, _Batt038, 14.864356),
 
-    // @Param: BattPCT_40
+    // @Param: BattPCT_020
     // @DisplayName: BLUtable
     // @Description: Battery Look Up Table for Percentage
     // @units: Percentage
     // @User: Advanced
-    AP_GROUPINFO("PCT040", 27, AP_BattMonitor_Params, _Batt040, 0),
+    AP_GROUPINFO("PCT020", 27, AP_BattMonitor_Params, _Batt020, 14.678338),
 
-    // @Param: BattPCT_30
+    // @Param: BattPCT_010
     // @DisplayName: BLUtable
     // @Description: Battery Look Up Table for Percentage
     // @units: Percentage
     // @User: Advanced
-    AP_GROUPINFO("PCT030", 28, AP_BattMonitor_Params, _Batt030, 0),
+    AP_GROUPINFO("PCT010", 28, AP_BattMonitor_Params, _Batt010, 14.534201),
 
 
-    // @Param: BattPCT_20
+    // @Param: BattPCT_007
     // @DisplayName: BLUtable
     // @Description: Battery Look Up Table for Percentage
     // @units: Percentage
     // @User: Advanced
-    AP_GROUPINFO("PCT020", 29, AP_BattMonitor_Params, _Batt020, 0),
+    AP_GROUPINFO("PCT007", 29, AP_BattMonitor_Params, _Batt007, 14.490273),
 
-    // @Param: BattPCT_10
+    // @Param: BattPCT_005
     // @DisplayName: BLUtable
     // @Description: Battery Look Up Table for Percentage
     // @units: Percentage
     // @User: Advanced
-    AP_GROUPINFO("PCT010", 30, AP_BattMonitor_Params, _Batt010, 0),
+    AP_GROUPINFO("PCT005", 30, AP_BattMonitor_Params, _Batt005, 14.447705),
 
-    // @Param: BattPCT_0
+    // @Param: BattPCT_002
     // @DisplayName: BLUtable
     // @Description: Battery Look Up Table for Percentage
     // @units: Percentage
     // @User: Advanced
-    AP_GROUPINFO("PCT000", 31, AP_BattMonitor_Params, _Batt000, 0),
+    AP_GROUPINFO("PCT002", 31, AP_BattMonitor_Params, _Batt002, 14.322222),
+
+        // @Param: BattPCT_000
+    // @DisplayName: BLUtable
+    // @Description: Battery Look Up Table for Percentage
+    // @units: Percentage
+    // @User: Advanced
+    AP_GROUPINFO("PCT000", 32, AP_BattMonitor_Params, _Batt000, 14.000000),
 
 
     AP_GROUPEND
