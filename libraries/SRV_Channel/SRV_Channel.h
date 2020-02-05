@@ -238,6 +238,9 @@ private:
     // reversal, following convention that 1 means reversed, 0 means normal
     AP_Int8 reversed;
     AP_Int16 function;
+    float rate;
+    AP_Int8 pwmout;
+    AP_Int8 pwmrate;
 
     // a pending output value as PWM
     uint16_t output_pwm;
