@@ -19,11 +19,8 @@
 #include <AP_Math/AP_Math.h>
 #include <AP_HAL/AP_HAL.h>
 #include <RC_Channel/RC_Channel.h>
-<<<<<<< HEAD
-=======
 #include <AP_RCMapper/AP_RCMapper.h>
 #include <GCS_MAVLink/GCS.h>
->>>>>>> master
 
 extern const AP_HAL::HAL& hal;
 
