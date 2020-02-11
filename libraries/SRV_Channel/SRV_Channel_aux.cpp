@@ -3,12 +3,10 @@
    it under the terms of the GNU General Public License as published by
    the Free Software Foundation, either version 3 of the License, or
    (at your option) any later version.
-
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
-
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
@@ -16,11 +14,10 @@
   SRV_Channel_aux.cpp - handling of servo auxillary functions
  */
 #include "SRV_Channel.h"
+
 #include <AP_Math/AP_Math.h>
 #include <AP_HAL/AP_HAL.h>
 #include <RC_Channel/RC_Channel.h>
-#include <AP_RCMapper/AP_RCMapper.h>
-#include <GCS_MAVLink/GCS.h>
 
 extern const AP_HAL::HAL& hal;
 
@@ -56,16 +53,10 @@ void SRV_Channel::output_ch(void)
                         output_pwm = radio_in;
                         ign_small_rcin_changes = false;
                     }
-                }       
-                        if (pwmout >= 1){
-                         float sum = output_pwm - 1000.0f;
-
-                        output_pwm = sum * 1000 * (1/pwmrate);
-                    }
+                }
             }
         }
     }
-
     if (!(SRV_Channels::disabled_mask & (1U<<ch_num))) {
         hal.rcout->write(ch_num, output_pwm);
     }
@@ -187,7 +178,6 @@ void SRV_Channels::enable_aux_servos()
             hal.rcout->enable_ch(c.ch_num);
         }
 
-        //    c.rate = _singleton->default_rate.get();
         /*
           for channels which have been marked as digital output then the
           MIN/MAX/TRIM values have no meaning for controlling output, as
@@ -723,7 +713,6 @@ void SRV_Channels::constrain_pwm(SRV_Channel::Aux_servo_function_t function)
 
 /*
   upgrade SERVO* parameters. This does the following:
-
    - update to 16 bit FUNCTION from AP_Int8
 */
 void SRV_Channels::upgrade_parameters(void)
