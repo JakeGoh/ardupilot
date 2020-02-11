@@ -135,8 +135,7 @@ Rover::Rover(void) :
     channel_lateral(nullptr),
     logger{g.log_bitmask},
     modes(&g.mode1),
-    control_mode(&mode_initializing),
-    G_Dt(0.02f)
+    control_mode(&mode_initializing)
 {
 }
 
@@ -151,15 +150,6 @@ void Rover::stats_update(void)
 }
 #endif
 
-
-/*
-  loop() is called rapidly while the sketch is running
- */
-void Rover::loop()
-{
-    scheduler.loop();
-    G_Dt = scheduler.get_last_loop_time_s();
-}
 
 // update AHRS system
 void Rover::ahrs_update()
@@ -215,7 +205,7 @@ void Rover::gcs_failsafe_check(void)
     }
 
     // check for updates from GCS within 2 seconds
-    failsafe_trigger(FAILSAFE_EVENT_GCS, failsafe.last_heartbeat_ms != 0 && (millis() - failsafe.last_heartbeat_ms) > 2000);
+    failsafe_trigger(FAILSAFE_EVENT_GCS, "GCS", failsafe.last_heartbeat_ms != 0 && (millis() - failsafe.last_heartbeat_ms) > 2000);
 }
 
 /*

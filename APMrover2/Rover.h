@@ -126,9 +126,6 @@ public:
 
     Rover(void);
 
-    // HAL::Callbacks implementation.
-    void loop(void) override;
-
 private:
 
     // must be the first AP_Param variable declared to ensure its
@@ -139,9 +136,6 @@ private:
     // all settable parameters
     Parameters g;
     ParametersG2 g2;
-
-    // main loop scheduler
-    AP_Scheduler scheduler;
 
     // mapping between input channels
     RCMapper rcmap;
@@ -237,11 +231,6 @@ private:
     // true if the compass's initial location has been set
     bool compass_init_location;
 
-    // IMU variables
-    // The main loop execution time.  Seconds
-    // This is the time between calls to the DCM algorithm and is the Integration time for the gyros.
-    float G_Dt;
-
     // flyforward timer
     uint32_t flyforward_start_ms;
 
@@ -330,7 +319,7 @@ private:
     void failsafe_ekf_off_event(void);
 
     // failsafe.cpp
-    void failsafe_trigger(uint8_t failsafe_type, bool on);
+    void failsafe_trigger(uint8_t failsafe_type, const char* type_str, bool on);
     void handle_battery_failsafe(const char* type_str, const int8_t action);
 #if ADVANCED_FAILSAFE == ENABLED
     void afs_fs_check(void);
