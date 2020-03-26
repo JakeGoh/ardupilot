@@ -40,11 +40,11 @@ void AP_Proximity_TeraRangerTower::update(void)
 // get maximum and minimum distances (in meters) of primary sensor
 float AP_Proximity_TeraRangerTower::distance_max() const
 {
-    return 1.5f;
+    return 4.5f;
 }
 float AP_Proximity_TeraRangerTower::distance_min() const
 {
-    return 0.002f;
+    return 0.20f;
 }
 
 // check for replies from sensor, returns true if at least one message was processed
@@ -59,7 +59,7 @@ bool AP_Proximity_TeraRangerTower::read_sensor_data()
 
     while (nbytes-- > 0) {
         char c = _uart->read();
-        if (c == 'M' ) {
+        if (c == 'T' ) {
             buffer_count = 0;
         }
 
@@ -70,8 +70,7 @@ bool AP_Proximity_TeraRangerTower::read_sensor_data()
             buffer_count = 0;
 
             // check if message has right CRC
-            //if (crc_crc8(buffer, 18) == buffer[18]){
-              if (buffer[1] == 'F' && buffer[2] != 9){
+            if (crc_crc8(buffer, 18) == buffer[18]){
                 update_sector_data(0,   UINT16_VALUE(buffer[2],  buffer[3]));   // d1
                 update_sector_data(45,  UINT16_VALUE(buffer[16], buffer[17]));  // d8
                 update_sector_data(90,  UINT16_VALUE(buffer[14], buffer[15]));  // d7
@@ -94,7 +93,7 @@ void AP_Proximity_TeraRangerTower::update_sector_data(int16_t angle_deg, uint16_
     const uint8_t sector = convert_angle_to_sector(angle_deg);
     _angle[sector] = angle_deg;
     _distance[sector] = ((float) distance_cm) / 1000;
-    _distance_valid[sector] = distance_cm != 0xffff && distance_cm != 0x0000 && distance_cm != 0x0001;
+    _distance_valid[sector] = distance_cm != 0xffff;
     _last_distance_received_ms = AP_HAL::millis();
     // update boundary used for avoidance
     update_boundary_for_sector(sector, true);
