@@ -91,6 +91,12 @@ static ChibiOS::Scheduler schedulerInstance;
 static ChibiOS::Util utilInstance;
 static Empty::OpticalFlow opticalFlowDriver;
 
+#if HAL_WITH_DSP
+static ChibiOS::DSP dspDriver;
+#else
+static Empty::DSP dspDriver;
+#endif
+
 #ifndef HAL_NO_FLASH_SUPPORT
 static ChibiOS::Flash flashDriver;
 #else
@@ -126,6 +132,7 @@ HAL_ChibiOS::HAL_ChibiOS() :
         &utilInstance,
         &opticalFlowDriver,
         &flashDriver,
+        &dspDriver,
         nullptr
         )
 {}
@@ -219,7 +226,7 @@ static void main_loop()
     if (hal.util->was_watchdog_reset()) {
         AP::internalerror().error(AP_InternalError::error_t::watchdog_reset);
         const AP_HAL::Util::PersistentData &pd = last_persistent_data;
-        AP::logger().WriteCritical("WDOG", "TimeUS,Task,IErr,IErrCnt,MavMsg,MavCmd,SemLine,FL,FT,FA,FP,ICSR", "QbIIHHHHHIBI",
+        AP::logger().WriteCritical("WDOG", "TimeUS,Tsk,IE,IEC,MvMsg,MvCmd,SmLn,FL,FT,FA,FP,ICSR,LR", "QbIIHHHHHIBII",
                                    AP_HAL::micros64(),
                                    pd.scheduler_task,
                                    pd.internal_errors,
@@ -231,7 +238,8 @@ static void main_loop()
                                    pd.fault_type,
                                    pd.fault_addr,
                                    pd.fault_thd_prio,
-                                   pd.fault_icsr);
+                                   pd.fault_icsr,
+                                   pd.fault_lr);
     }
 #endif // HAL_NO_LOGGING
 #endif // IOMCU_FW
@@ -279,8 +287,8 @@ void HAL_ChibiOS::run(int argc, char * const argv[], Callbacks* callbacks) const
      *   RTOS is active.
      */
 
-#ifdef HAL_USB_PRODUCT_ID
-  setup_usb_strings();
+#if HAL_USE_SERIAL_USB == TRUE
+    usb_initialise();
 #endif
 
 #ifdef HAL_STDOUT_SERIAL

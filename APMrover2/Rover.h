@@ -228,9 +228,6 @@ private:
                            FUNCTOR_BIND_MEMBER(&Rover::handle_battery_failsafe, void, const char*, const int8_t),
                            _failsafe_priorities};
 
-    // true if the compass's initial location has been set
-    bool compass_init_location;
-
     // flyforward timer
     uint32_t flyforward_start_ms;
 
@@ -279,7 +276,9 @@ private:
 
 private:
 
-    // APMrover2.cpp
+    // Rover.cpp
+    bool set_target_location(const Location& target_loc) override;
+    bool set_target_velocity_NED(const Vector3f& vel_ned) override;
     void stats_update();
     void ahrs_update();
     void gcs_failsafe_check(void);
@@ -353,7 +352,7 @@ private:
     void load_parameters(void) override;
 
     // radio.cpp
-    void set_control_channels(void);
+    void set_control_channels(void) override;
     void init_rc_in();
     void rudder_arm_disarm_check();
     void read_radio();

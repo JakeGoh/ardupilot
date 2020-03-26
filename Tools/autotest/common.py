@@ -185,7 +185,7 @@ class Telem(object):
                     pass
             self.port = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.port.connect(self.destination_address)
-            self.port.setblocking(0)
+            self.port.setblocking(False)
             self.port.setsockopt(socket.SOL_TCP, socket.TCP_NODELAY, 1)
             self.connected = True
             self.progress("Connected")
@@ -495,8 +495,7 @@ class FRSkySPort(FRSky):
         self.id_descriptions = {
             0x5000: "status text (dynamic)",
             0x5006: "Attitude and range (dynamic)",
-            0x800: "GPS lat (600 with 1 sensor)",
-            0x800: "GPS lon (600 with 1 sensor)",
+            0x800: "GPS lat or lon (600 with 1 sensor)",
             0x5005: "Vel and Yaw",
             0x5001: "AP status",
             0x5002: "GPS Status",
@@ -513,7 +512,7 @@ class FRSkySPort(FRSky):
             0x21: "BARO_ALT_AP",
             0x30: "VARIO",
             0x39: "VFAS",
-            0x800: "GPS",
+            # 0x800: "GPS", ## comments as duplicated dictrionary key
         }
 
         self.sensors_to_poll = [
@@ -688,6 +687,9 @@ class AutoTest(ABC):
                  viewerip=None,
                  use_map=False,
                  _show_test_timings=False):
+
+        if binary is None:
+            raise ValueError("Should always have a binary")
 
         self.binary = binary
         self.valgrind = valgrind
@@ -891,6 +893,20 @@ class AutoTest(ABC):
                                        0)
         self.detect_and_handle_reboot(old_bootcount, required_bootcount=required_bootcount)
 
+    def send_cmd_enter_cpu_lockup(self):
+        """Poke ArduPilot to stop the main loop from running"""
+        self.mav.mav.command_long_send(self.sysid_thismav(),
+                                       1,
+                                       mavutil.mavlink.MAV_CMD_PREFLIGHT_REBOOT_SHUTDOWN,
+                                       1,  # confirmation
+                                       42, # lockup autopilot
+                                       24, # no, really, we mean it
+                                       71, # seriously, we're not kidding
+                                       93, # we know exactly what we're
+                                       0,
+                                       0,
+                                       0)
+
     def reboot_sitl(self, required_bootcount=None):
         """Reboot SITL instance and wait for it to reconnect."""
         self.progress("Rebooting SITL")
@@ -948,6 +964,366 @@ class AutoTest(ABC):
         if m is None:
             raise NotAchievedException("Did not get SYSTEM_TIME")
         self.drain_mav()
+
+    def htree_from_xml(self, xml_filepath):
+        '''swiped from mavproxy_param.py'''
+        xml = open(xml_filepath,'rb').read()
+        from lxml import objectify
+        objectify.enable_recursive_str()
+        tree = objectify.fromstring(xml)
+        htree = {}
+        for p in tree.vehicles.parameters.param:
+            n = p.get('name').split(':')[1]
+            htree[n] = p
+        for lib in tree.libraries.parameters:
+            for p in lib.param:
+                n = p.get('name')
+                htree[n] = p
+        return htree
+
+    def test_parameter_documentation_get_all_parameters(self):
+        xml_filepath = os.path.join(self.rootdir(), "apm.pdef.xml")
+        param_parse_filepath = os.path.join(self.rootdir(), 'Tools', 'autotest', 'param_metadata', 'param_parse.py')
+        try:
+            os.unlink(xml_filepath)
+        except OSError:
+            pass
+        vehicle = self.log_name()
+        if vehicle == "HeliCopter":
+            vehicle = "ArduCopter"
+        if vehicle == "QuadPlane":
+            vehicle = "ArduPlane"
+        cmd = [param_parse_filepath, '--vehicle', vehicle]
+#        cmd.append("--verbose")
+        if util.run_cmd(cmd,
+                        directory=util.reltopdir('.')) != 0:
+            print("Failed param_parse.py (%s)" % vehicle)
+            return False
+        htree = self.htree_from_xml(xml_filepath)
+
+        target_system = self.sysid_thismav()
+        target_component = 1
+
+        self.customise_SITL_commandline([
+            "--unhide-groups"
+        ])
+
+        (parameters, seq_id) = self.download_parameters(target_system, target_component)
+        fail = False
+        for param in parameters.keys():
+            if param.startswith("SIM_"):
+                # too many of these to worry about
+                continue
+            if param not in htree:
+                print("%s not in XML" % param)
+                fail = True
+        if fail:
+            raise NotAchievedException("Downloaded parameters missing in XML")
+
+        # FIXME: this should be doable if we filter out e.g BRD_* and CAN_*?
+#        self.progress("Checking no extra parameters present in XML")
+#        fail = False
+#        for param in htree:
+#            if param.startswith("SIM_"):
+#                # too many of these to worry about
+#                continue
+#            if param not in parameters:
+#                print("%s not in downloaded parameters but in XML" % param)
+#                fail = True
+#        if fail:
+#            raise NotAchievedException("Extra parameters in XML")
+
+    def find_format_defines(self, filepath):
+        ret = {}
+        for line in open(filepath,'rb').readlines():
+            m = re.match('#define (\w+_(?:LABELS|FMT|UNITS|MULTS))\s+(".*")', line)
+            if m is None:
+                continue
+            (a, b) = (m.group(1), m.group(2))
+            if a in ret:
+                raise NotAchievedException("Duplicate define for (%s)" % a)
+            ret[a] = b
+        return ret
+
+    def vehicle_code_dirpath(self):
+        '''returns path to vehicle-specific code directory e.g. ~/ardupilot/APMrover2'''
+        dirname = self.log_name()
+        if dirname == "QuadPlane":
+            dirname = "ArduPlane"
+        elif dirname == "HeliCopter":
+            dirname = "ArduCopter"
+        return os.path.join(self.rootdir(), dirname)
+
+    def all_log_format_ids(self):
+        ids = {}
+        filepath = os.path.join(self.rootdir(), 'libraries', 'AP_Logger', 'LogStructure.h')
+        state_outside = 0
+        state_inside = 1
+        state = state_outside
+
+        defines = self.find_format_defines(filepath)
+
+        linestate_none = 45
+        linestate_within = 46
+        linestate = linestate_none
+        message_infos = []
+        for line in open(filepath,'rb').readlines():
+#            print("line: %s" % line)
+            line = re.sub("//.*", "", line) # trim comments
+            if re.match("\s*$", line):
+                # blank line
+                continue
+            if state == state_outside:
+                if "#define LOG_BASE_STRUCTURES" in line:
+#                    self.progress("Moving inside")
+                    state = state_inside
+                continue
+            if state == state_inside:
+                if "#define LOG_COMMON_STRUCTURES" in line:
+#                    self.progress("Moving outside")
+                    state = state_outside
+                    break
+                if linestate == linestate_none:
+                    if "#define LOG_SBP_STRUCTURES" in line:
+                        continue
+                    m = re.match("\s*{(.*)},\s*", line)
+                    if m is not None:
+                        # complete line
+#                        print("Complete line: %s" % str(line))
+                        message_infos.append(m.group(1))
+                        continue
+                    m = re.match("\s*{(.*)[\\\]", line)
+                    if m is None:
+                        raise NotAchievedException("Bad line %s" % line)
+                    partial_line = m.group(1)
+                    linestate = linestate_within
+                    continue
+                if linestate == linestate_within:
+                    m = re.match("(.*)}", line)
+                    if m is None:
+                        raise NotAchievedException("Bad closing line (%s)" % line)
+                    message_infos.append(partial_line + m.group(1))
+                    linestate = linestate_none
+                    continue
+                raise NotAchievedException("Bad line (%s)")
+
+        if linestate != linestate_none:
+            raise NotAchievedException("Must be linestate-none at end of file")
+        if state == state_inside:
+            raise NotAchievedException("Must be outside at end of file")
+
+        # now look in the vehicle-specific logfile:
+        filepath = os.path.join(self.vehicle_code_dirpath(), "Log.cpp")
+        state_outside = 67
+        state_inside = 68
+        state = state_outside
+        linestate_none = 89
+        linestate_within = 90
+        linestate = linestate_none
+        for line in open(filepath,'rb').readlines():
+            line = re.sub("//.*", "", line) # trim comments
+            if re.match("\s*$", line):
+                # blank line
+                continue
+            if state == state_outside:
+                if ("const LogStructure" in line or
+                    "const struct LogStructure" in line):
+                    state = state_inside;
+                continue
+            if state == state_inside:
+                if re.match("};", line):
+                    state = state_outside;
+                    break;
+                if linestate == linestate_none:
+                    if "#if FRAME_CONFIG == HELI_FRAME" in line:
+                        continue
+                    if "#if PRECISION_LANDING == ENABLED" in line:
+                        continue
+                    if "#end" in line:
+                        continue
+                    if "LOG_COMMON_STRUCTURES" in line:
+                        continue
+                    m = re.match("\s*{(.*)},\s*", line)
+                    if m is not None:
+                        # complete line
+#                        print("Complete line: %s" % str(line))
+                        message_infos.append(m.group(1))
+                        continue
+                    m = re.match("\s*{(.*)", line)
+                    if m is None:
+                        raise NotAchievedException("Bad line %s" % line)
+                    partial_line = m.group(1)
+                    linestate = linestate_within
+                    continue
+                if linestate == linestate_within:
+                    m = re.match("(.*)}", line)
+                    if m is None:
+                        raise NotAchievedException("Bad closing line (%s)" % line)
+                    message_infos.append(partial_line + m.group(1))
+                    linestate = linestate_none
+                    continue
+                raise NotAchievedException("Bad line (%s)")
+
+        if state == state_inside:
+            raise NotAchievedException("Should not be in state_inside at end")
+
+
+        for message_info in message_infos:
+            for define in defines:
+                message_info = re.sub(define, defines[define], message_info)
+            m = re.match('\s*LOG_\w+\s*,\s*sizeof\([^)]+\)\s*,\s*"(\w+)"\s*,\s*"(\w+)"\s*,\s*"([\w,]+)"\s*,\s*"([^"]+)"\s*,\s*"([^"]+)"\s*$', message_info)
+            if m is None:
+                raise NotAchievedException("Failed to match (%s)" % message_info)
+            (name, fmt, labels, units, multipliers) = (m.group(1), m.group(2), m.group(3), m.group(4), m.group(5))
+            if name in ids:
+                raise NotAchievedException("Already seen a (%s) message" % name)
+            ids[name] = {
+                "name": name,
+                "format": fmt,
+                "labels": labels,
+                "units": units,
+                "multipliers": multipliers,
+            }
+
+        # now look for Log_Write(...) messages:
+        base_directories = [
+            os.path.join(self.rootdir(), 'libraries'),
+            self.vehicle_code_dirpath(),
+        ]
+        log_write_statements = []
+        for base_directory in base_directories:
+            for root, dirs, files in os.walk(base_directory):
+                state_outside = 37
+                state_inside = 38
+                state = state_outside
+                for f in files:
+                    if not re.search("[.]cpp$", f):
+                        continue
+                    filepath = os.path.join(root, f)
+                    count = 0
+                    for line in open(filepath,'rb').readlines():
+                        if state == state_outside:
+                            if re.match("\s*AP::logger\(\)[.]Write\(", line):
+                                state = state_inside
+                                log_write_statement = line
+                            continue
+                        if state == state_inside:
+                            log_write_statement += line
+                            if re.match(".*\);", line):
+                                log_write_statements.append(log_write_statement)
+                                state = state_outside
+                        count += 1
+                    if state != state_outside:
+                        raise NotAchievedException("Expected to be outside at end of file")
+#                    print("%s has %u lines" % (f, count))
+        # change all whitespace to single space
+        log_write_statements = [re.sub("\s+", " ", x) for x in log_write_statements]
+#        print("Got log-write-statements: %s" % str(log_write_statements))
+        results = []
+        for log_write_statement in log_write_statements:
+            for define in defines:
+                log_write_statement = re.sub(define, defines[define], log_write_statement)
+            my_re = ' AP::logger\(\)[.]Write\(\s*"(\w+)"\s*,\s*"([\w,]+)".*\);'
+            m = re.match(my_re, log_write_statement)
+            if m is None:
+                if "TimeUS,C,Cnt,IMUMin,IMUMax,EKFMin" in log_write_statement:
+                    # special-case for logging ekf timing:
+                    for name in ["NKT", "XKT"]:
+                        x = re.sub(" name,", '"'+name+'",', log_write_statement)
+                        m = re.match(my_re, x)
+                        if m is None:
+                            raise NotAchievedException("Did not match (%s)", x)
+                        results.append((m.group(1), m.group(2)))
+                    continue
+                raise NotAchievedException("Did not match (%s)" % (log_write_statement))
+            else:
+                results.append((m.group(1), m.group(2)))
+
+        for result in results:
+            (name, labels) = result
+            if name in ids:
+                raise Exception("Already have id for (%s)" % name)
+#            self.progress("Adding Log_Write result (%s)" % name)
+            ids[name] = {
+                "name": name,
+                "labels": labels,
+            }
+
+        if len(ids) == 0:
+            raise NotAchievedException("Did not get any ids")
+
+        return ids
+
+    def test_onboard_logging_generation(self):
+        '''just generates, as we can't do a lot of testing'''
+        xml_filepath = os.path.join(self.rootdir(), "LogMessages.xml")
+        parse_filepath = os.path.join(self.rootdir(), 'Tools', 'autotest', 'logger_metadata', 'parse.py')
+        try:
+            os.unlink(xml_filepath)
+        except OSError:
+            pass
+        vehicle = self.log_name()
+        vehicle_map = {
+            "ArduCopter": "Copter",
+            "HeliCopter": "Copter",
+            "ArduPlane": "Plane",
+            "QuadPlane": "Plane",
+            "APMrover2": "Rover",
+            "AntennaTracker": "Tracker",
+            "ArduSub": "Sub",
+        }
+        vehicle = vehicle_map[vehicle]
+
+        cmd = [parse_filepath, '--vehicle', vehicle]
+#        cmd.append("--verbose")
+        if util.run_cmd(cmd,
+                        directory=util.reltopdir('.')) != 0:
+            print("Failed parse.py (%s)" % vehicle)
+            return False
+        length = os.path.getsize(xml_filepath)
+        min_length = 1024
+        if length < min_length:
+            raise NotAchievedException("short xml file (%u < %u)" %
+                                       (length, min_length))
+        self.progress("xml file length is %u" % length)
+
+        from lxml import objectify
+        xml = open(xml_filepath,'rb').read()
+        objectify.enable_recursive_str()
+        tree = objectify.fromstring(xml)
+
+        docco_ids = {}
+        for thing in tree.logformat:
+            name = str(thing.get("name"))
+            docco_ids[name] = {
+                "name": name,
+                "labels": [],
+            }
+            for field in thing.fields.field:
+#                print("field: (%s)" % str(field))
+                fieldname = field.get("name")
+#                print("Got (%s.%s)" % (name,str(fieldname)))
+                docco_ids[name]["labels"].append(fieldname)
+
+        code_ids = self.all_log_format_ids()
+        print("Code ids: (%s)" % str(code_ids.keys()))
+        print("Docco ids: (%s)" % str(docco_ids.keys()))
+
+        for name in sorted(code_ids.keys()):
+            if name not in docco_ids:
+                self.progress("Undocumented message: %s" % name)
+                continue
+            for label in code_ids[name]["labels"].split(","):
+                if label not in docco_ids[name]["labels"]:
+                    raise NotAchievedException("%s.%s not in documented fields" %
+                                               (name, label))
+        for name in sorted(docco_ids):
+            if name not in code_ids:
+                raise NotAchievedException("Documented message (%s) not in code" % name)
+            for label in docco_ids[name]["labels"]:
+                if label not in code_ids[name]["labels"].split(","):
+                    raise NotAchievedException("documented field %s.%s not found in code" %
+                                               (name, label))
 
     def initialise_after_reboot_sitl(self):
 
@@ -1093,9 +1469,11 @@ class AutoTest(ABC):
     #################################################
     # SIM UTILITIES
     #################################################
-    def get_sim_time(self):
+    def get_sim_time(self, timeout=60):
         """Get SITL time in seconds."""
-        m = self.mav.recv_match(type='SYSTEM_TIME', blocking=True)
+        m = self.mav.recv_match(type='SYSTEM_TIME', blocking=True, timeout=timeout)
+        if m is None:
+            raise AutoTestTimeoutException("Did not get SYSTEM_TIME message")
         return m.time_boot_ms * 1.0e-3
 
     def get_sim_time_cached(self):
@@ -1462,22 +1840,22 @@ class AutoTest(ABC):
         }
 
     def set_rc_from_map(self, _map, timeout=2000):
-        copy = _map.copy()
+        map_copy = _map.copy()
         tstart = self.get_sim_time()
-        while len(copy.keys()):
+        while len(map_copy.keys()):
             if self.get_sim_time_cached() - tstart > timeout:
                 raise SetRCTimeout("Failed to set RC channels")
-            for chan in copy:
-                value = copy[chan]
+            for chan in map_copy:
+                value = map_copy[chan]
                 self.send_set_rc(chan, value)
             m = self.mav.recv_match(type='RC_CHANNELS', blocking=True)
             self.progress("m: %s" % m)
             new = dict()
-            for chan in copy:
+            for chan in map_copy:
                 chan_pwm = getattr(m, "chan" + str(chan) + "_raw")
-                if chan_pwm != copy[chan]:
-                    new[chan] = copy[chan]
-            copy = new
+                if chan_pwm != map_copy[chan]:
+                    new[chan] = map_copy[chan]
+            map_copy = new
 
     def set_rc_default(self):
         """Setup all simulated RC control to 1500."""
@@ -1653,7 +2031,6 @@ class AutoTest(ABC):
         p2 = 0
         if force:
             p2 = 21196 # magic force disarm value
-        tstart = self.get_sim_time()
         self.run_cmd(mavutil.mavlink.MAV_CMD_COMPONENT_ARM_DISARM,
                      0,  # DISARM
                      p2,
@@ -1663,12 +2040,88 @@ class AutoTest(ABC):
                      0,
                      0,
                      timeout=timeout)
-        while self.get_sim_time_cached() - tstart < timeout:
+        return self.wait_disarmed()
+
+    def wait_disarmed_default_wait_time(self):
+        return 30
+
+    def wait_disarmed(self, timeout=None, tstart=None):
+        if timeout is None:
+            timeout = self.wait_disarmed_default_wait_time()
+        self.progress("Waiting for DISARM")
+        if tstart is None:
+            tstart = self.get_sim_time()
+        while True:
+            delta = self.get_sim_time_cached() - tstart
+            if delta > timeout:
+                raise AutoTestTimeoutException("Failed to DISARM")
             self.wait_heartbeat()
+            self.progress("Got heartbeat")
             if not self.mav.motors_armed():
-                self.progress("Motors DISARMED")
+                self.progress("DISARMED after %.2f seconds (allowed=%.2f)" %
+                              (delta, timeout))
                 return True
-        raise AutoTestTimeoutException("Failed to DISARM with mavlink")
+
+    def CPUFailsafe(self):
+        '''Most vehicles just disarm on failsafe'''
+        # customising the SITL commandline ensures the process will
+        # get stopped/started at the end of the test
+        self.customise_SITL_commandline([])
+        self.wait_ready_to_arm()
+        self.arm_vehicle()
+        self.progress("Sending enter-cpu-lockup")
+        # when we're in CPU lockup we don't get SYSTEM_TIME messages,
+        # so get_sim_time breaks:
+        tstart = self.get_sim_time()
+        self.send_cmd_enter_cpu_lockup()
+        self.wait_disarmed(timeout=5, tstart=tstart)
+
+
+    def cpufailsafe_wait_servo_channel_value(self, channel, value, timeout=30):
+        '''we get restricted messages while doing cpufailsafe, this working then'''
+        start = time.time()
+        while True:
+            if time.time() - start > timeout:
+                raise NotAchievedException("Did not achieve value")
+            m = self.mav.recv_match(type='SERVO_OUTPUT_RAW', blocking=True, timeout=1)
+
+            if m is None:
+                raise NotAchievedException("Did not get SERVO_OUTPUT_RAW")
+            channel_field = "servo%u_raw" % channel
+            m_value = getattr(m, channel_field, None)
+            self.progress("Servo%u=%u want=%u" % (channel, m_value, value))
+            if m_value == value:
+                break
+
+    def plane_CPUFailsafe(self):
+        '''In lockup Plane should copy RC inputs to RC outputs'''
+        # customising the SITL commandline ensures the process will
+        # get stopped/started at the end of the test
+        self.customise_SITL_commandline([])
+        self.wait_ready_to_arm()
+        self.arm_vehicle()
+        self.progress("Sending enter-cpu-lockup")
+        # when we're in CPU lockup we don't get SYSTEM_TIME messages,
+        # so get_sim_time breaks:
+        self.send_cmd_enter_cpu_lockup()
+        start_time = time.time() # not sim time!
+        while True:
+            want = "Initialising ArduPilot"
+            if time.time() - start_time > 30:
+                raise NotAchievedException("Did not get %s" % want)
+            # we still need to parse the incoming messages:
+            m = self.mav.recv_match(type='STATUSTEXT', blocking=True, timeout=0.1)
+            x = self.mav.messages.get("STATUSTEXT", None)
+            if x is not None and want in x.text:
+                break
+        # Different scaling for RC input and servo output means the
+        # servo output value isn't the rc input value:
+        self.progress("Setting RC to 1200")
+        self.send_set_rc(2, 1200)
+        self.progress("Waiting for servo of 1260")
+        self.cpufailsafe_wait_servo_channel_value(2, 1260)
+        self.send_set_rc(2, 1700)
+        self.cpufailsafe_wait_servo_channel_value(2, 1660)
 
     def mavproxy_arm_vehicle(self):
         """Arm vehicle with mavlink arm message send from MAVProxy."""
@@ -1682,8 +2135,7 @@ class AutoTest(ABC):
         """Disarm vehicle with mavlink disarm message send from MAVProxy."""
         self.progress("Disarm motors with MavProxy")
         self.mavproxy.send('disarm\n')
-        self.mav.motors_disarmed_wait()
-        self.progress("DISARMED")
+        self.wait_disarmed()
         return True
 
     def arm_motors_with_rc_input(self, timeout=20):
@@ -1961,6 +2413,21 @@ class AutoTest(ABC):
                                                              m.result))
                 break
 
+    def verify_parameter_values(self, parameter_stuff):
+        bad = ""
+        for param in parameter_stuff:
+            fetched_value = self.get_parameter(param)
+            wanted_value = parameter_stuff[param]
+            max_delta = 0.0
+            if type(wanted_value) == tuple:
+                max_delta = wanted_value[1]
+                wanted_value = wanted_value[0]
+            if abs(fetched_value - wanted_value) > max_delta:
+                bad += "%s=%f (want=%f +/-%f)    " % (param, fetched_value, wanted_value, max_delta)
+        if len(bad):
+            raise NotAchievedException("Bad parameter values: %s" %
+                                       (bad,))
+
     #################################################
     # UTILITIES
     #################################################
@@ -2029,13 +2496,13 @@ class AutoTest(ABC):
             mavutil.location(loc1_lat*1e-7, loc1_lon*1e-7),
             mavutil.location(loc2_lat*1e-7, loc2_lon*1e-7))
 
-        dlat = loc2_lat - loc1_lat
-        dlong = loc2_lon - loc1_lon
-
-        dlat /= 10000000.0
-        dlong /= 10000000.0
-
-        return math.sqrt((dlat*dlat) + (dlong*dlong)) * 1.113195e5
+        # dlat = loc2_lat - loc1_lat
+        # dlong = loc2_lon - loc1_lon
+        #
+        # dlat /= 10000000.0
+        # dlong /= 10000000.0
+        #
+        # return math.sqrt((dlat*dlat) + (dlong*dlong)) * 1.113195e5
 
     @staticmethod
     def get_bearing(loc1, loc2):
@@ -2077,7 +2544,7 @@ class AutoTest(ABC):
 
     def get_autopilot_capabilities(self):
         # Cannot use run_cmd otherwise the respond is lost during the wait for ACK
-        self.mav.mav.command_long_send(1,
+        self.mav.mav.command_long_send(self.sysid_thismav(),
                                        1,
                                        mavutil.mavlink.MAV_CMD_REQUEST_AUTOPILOT_CAPABILITIES,
                                        0,  # confirmation
@@ -2723,8 +3190,8 @@ class AutoTest(ABC):
         for desc in self.test_timings.keys():
             if len(desc) > longest:
                 longest = len(desc)
-        for desc, test_time in sorted(self.test_timings.iteritems(),
-                                 key=self.show_test_timings_key_sorter):
+        for desc, test_time in sorted(self.test_timings.items(),
+                                      key=self.show_test_timings_key_sorter):
             fmt = "%" + str(longest) + "s: %.2fs"
             self.progress(fmt % (desc, test_time))
 
@@ -2779,7 +3246,8 @@ class AutoTest(ABC):
 
         self.wait_heartbeat()
         if self.armed() and not self.is_tracker():
-            ex = ArmedAtEndOfTestException("Still armed at end of test")
+            if ex is None:
+                ex = ArmedAtEndOfTestException("Still armed at end of test")
             self.progress("Armed at end of test; force-rebooting SITL")
             self.disarm_vehicle(force=True)
             self.forced_post_test_sitl_reboots += 1
@@ -3107,10 +3575,14 @@ class AutoTest(ABC):
         # original home should be close to SITL home...
         start_loc = self.sitl_start_location()
         self.progress("SITL start loc: %s" % str(start_loc))
-        if abs(orig_home.latitude * 1.0e-7 - start_loc.lat) > 0.0000001:
-            raise ValueError("homes differ in lat")
-        if abs(orig_home.longitude * 1.0e-7 - start_loc.lng) > 0.0000001:
-            raise ValueError("homes differ in lon")
+        delta = abs(orig_home.latitude * 1.0e-7 - start_loc.lat)
+        if delta > 0.0000001:
+            raise ValueError("homes differ in lat got=%f vs want=%f delta=%f" %
+                             (orig_home.latitude * 1.0e-7, start_loc.lat, delta))
+        delta = abs(orig_home.longitude * 1.0e-7 - start_loc.lng)
+        if delta > 0.0000001:
+            raise ValueError("homes differ in lon  got=%f vs want=%f delta=%f" %
+                             (orig_home.longitude * 1.0e-7, start_loc.lng, delta))
         if self.is_rover():
             self.progress("### Rover skipping altitude check unti position fixes in")
         else:
@@ -3206,6 +3678,107 @@ class AutoTest(ABC):
             # tracker starts armed...
             self.disarm_vehicle(force=True)
         self.reboot_sitl()
+
+    def test_fixed_yaw_calibration(self):
+        self.context_push()
+        ex = None
+        try:
+            wanted = {
+                "COMPASS_OFS_X": (100, 3.0),
+                "COMPASS_OFS_Y": (200, 3.0),
+                "COMPASS_OFS_Z": (300, 3.0),
+                "COMPASS_DIA_X": 1,
+                "COMPASS_DIA_Y": 1,
+                "COMPASS_DIA_Z": 1,
+                "COMPASS_ODI_X": 0,
+                "COMPASS_ODI_Y": 0,
+                "COMPASS_ODI_Z": 0,
+
+                "COMPASS_OFS2_X": (100, 3.0),
+                "COMPASS_OFS2_Y": (200, 3.0),
+                "COMPASS_OFS2_Z": (300, 3.0),
+                "COMPASS_DIA2_X": 1,
+                "COMPASS_DIA2_Y": 1,
+                "COMPASS_DIA2_Z": 1,
+                "COMPASS_ODI2_X": 0,
+                "COMPASS_ODI2_Y": 0,
+                "COMPASS_ODI2_Z": 0,
+
+                "COMPASS_OFS3_X": (100, 3.0),
+                "COMPASS_OFS3_Y": (200, 3.0),
+                "COMPASS_OFS3_Z": (300, 3.0),
+                "COMPASS_DIA3_X": 1,
+                "COMPASS_DIA3_Y": 1,
+                "COMPASS_DIA3_Z": 1,
+                "COMPASS_ODI2_X": 0,
+                "COMPASS_ODI2_Y": 0,
+                "COMPASS_ODI2_Z": 0,
+            }
+            self.set_parameter("SIM_MAG_OFS_X", 100)
+            self.set_parameter("SIM_MAG_OFS_Y", 200)
+            self.set_parameter("SIM_MAG_OFS_Z", 300)
+
+            # set to some sensible-ish initial values.  If your initial
+            # offsets are way, way off you can get some very odd effects.
+            for param in wanted:
+                value = 0.0
+                if "DIA" in param:
+                    value = 1.001
+                elif "ODI" in param:
+                    value = 0.001
+                self.set_parameter(param, value)
+            # zero the parameters:
+            self.progress("zeroing parameters")
+            self.drain_mav()  # these two lines are odd....
+            self.get_sim_time()
+            self.run_cmd(mavutil.mavlink.MAV_CMD_PREFLIGHT_SET_SENSOR_OFFSETS,
+                         2, # param1 (compass0)
+                         0, # param2
+                         0, # param3
+                         0, # param4
+                         0, # param5
+                         0, # param6
+                         0 # param7
+            )
+            self.progress("zeroed parameters")
+            # ensure these are all zero; note that we don't set the DIA or
+            # ODI in SET_SENSOR_OFFSETS...
+            for axis in "X", "Y", "Z":
+                name = "COMPASS_OFS_%s" % axis
+                value = self.get_parameter(name)
+                if value != 0.0:
+                    raise NotAchievedException("Failed to zero %s; got %f" %
+                                               (name, value))
+            self.change_mode('LOITER')
+            self.wait_ready_to_arm() # so we definitely have position
+            ss = self.mav.recv_match(type='SIMSTATE', blocking=True, timeout=1)
+            if ss is None:
+                raise NotAchievedException("Did not get SIMSTATE")
+            self.progress("Got SIMSTATE (%s)" % str(ss))
+
+            self.run_cmd(mavutil.mavlink.MAV_CMD_FIXED_MAG_CAL_YAW,
+                         math.degrees(ss.yaw), # param1
+                         0, # param2
+                         0, # param3
+                         0, # param4
+
+                         0, # param5
+                         0, # param6
+                         0 # param7
+                         )
+            self.verify_parameter_values(wanted)
+
+            self.progress("Rebooting and making sure we could arm with these values")
+            self.reboot_sitl()
+            self.wait_ready_to_arm(timeout=60)
+
+        except Exception as e:
+            ex = e
+
+        self.context_pop()
+
+        if ex is not None:
+            raise ex
 
     def test_dataflash_over_mavlink(self):
         self.context_push()
@@ -4076,25 +4649,57 @@ switch value'''
                 pass
         return fred
 
+    def wait_distance_to_home(self, distance_min, distance_max, timeout=10, use_cached_home=True):
+        tstart = self.get_sim_time()
+        while True:
+            if self.get_sim_time() - tstart > timeout:
+                raise NotAchievedException("Did not achieve distance from home")
+            distance = self.distance_to_home(use_cached_home)
+            self.progress("Distance from home: now=%f %f<want<%f" %
+                          (distance, distance_min, distance_max))
+            if distance >= distance_min and distance <= distance_max:
+                return
+
+    # download parameters tries to cope with its download being
+    # interrupted or broken by simply retrying the download a few
+    # times.
     def download_parameters(self, target_system, target_component):
         # try a simple fetch-all:
-        self.mav.mav.param_request_list_send(target_system, target_component)
         tstart = self.get_sim_time_cached()
+        last_parameter_received = 0
+        attempt_count = 0
+        start_done = False
+        # make flake8 happy:
         count = 0
-        expected_count = None
+        expected_count = 0
         seen_ids = {}
-        id_seq = {}
+        self.progress("Downloading parameters")
         while True:
             now = self.get_sim_time_cached()
-            if now - tstart > 10:
-                raise AutoTestTimeoutException("Failed to download parameters")
-            m = self.mav.recv_match(type='PARAM_VALUE', blocking=True, timeout=1)
+            if not start_done or now - last_parameter_received > 10:
+                start_done = True
+                if attempt_count > 3:
+                    raise AutoTestTimeoutException("Failed to download parameters  (have %s/%s) (seen_ids-count=%u)" %
+                                                   (str(count), str(expected_count), len(seen_ids.keys())))
+                elif attempt_count != 0:
+                    self.progress("Download failed; retrying")
+                self.drain_mav()
+                self.mav.mav.param_request_list_send(target_system, target_component)
+                attempt_count += 1
+                count = 0
+                expected_count = None
+                seen_ids = {}
+                id_seq = {}
+            m = self.mav.recv_match(type='PARAM_VALUE', blocking=True, timeout=10)
             if m is None:
                 raise AutoTestTimeoutException("tardy PARAM_VALUE (have %s/%s)" % (
                     str(count), str(expected_count)))
             if m.param_index == 65535:
                 self.progress("volunteered parameter: %s" % str(m))
                 continue
+            if False:
+                self.progress("  received (%4u/%4u %s=%f" %
+                              (m.param_index, m.param_count, m.param_id, m.param_value))
             if m.param_index >= m.param_count:
                 raise ValueError("parameter index (%u) gte parameter count (%u)" %
                                  (m.param_index, m.param_count))
@@ -4106,10 +4711,12 @@ switch value'''
             if m.param_id not in seen_ids:
                 count += 1
                 seen_ids[m.param_id] = m.param_value
+                last_parameter_received = now
                 if count == expected_count:
                     break
 
-        self.progress("Downloaded %u parameters OK" % count)
+        self.progress("Downloaded %u parameters OK (attempt=%u)" %
+                      (count, attempt_count))
         return (seen_ids, id_seq)
 
     def test_parameters_download(self):
@@ -4170,8 +4777,14 @@ switch value'''
         if self.get_parameter("MIS_OPTIONS") != 1:
             raise NotAchievedException("Failed to set MIS_OPTIONS")
 
+    def test_parameter_documentation(self):
+        '''ensure parameter documentation is valid'''
+        self.start_subsubtest("Check all parameters are documented")
+        self.test_parameter_documentation_get_all_parameters()
+
     def test_parameters(self):
         '''general small tests for parameter system'''
+        self.test_parameter_documentation();
         self.test_parameters_mis_total()
         self.test_parameters_download()
 
@@ -4492,16 +5105,16 @@ switch value'''
         # This, at least makes sure we're getting some of each
         # message.  These are ordered according to the wfq scheduler
         wants = {
-            0x5000: lambda x : True,
-            0x5006: lambda x : True,
-            0x800: lambda x : True,
+            0x5000: lambda xx : True,
+            0x5006: lambda xx : True,
+            0x800: lambda xx : True,
             0x5005: self.tfp_validate_vel_and_yaw,
-            0x5001: lambda x : True,
-            0x5002: lambda x : True,
-            0x5004: lambda x : True,
+            0x5001: lambda xx : True,
+            0x5002: lambda xx : True,
+            0x5004: lambda xx : True,
             #            0x5008: lambda x : True, # no second battery, so this doesn't arrive
             0x5003: self.tfp_validate_battery1,
-            0x5007: lambda x : True,
+            0x5007: lambda xx : True,
         }
         tstart = self.get_sim_time_cached()
         while len(wants):
@@ -4712,9 +5325,21 @@ switch value'''
              "Test Config Error Loop",
              self.test_config_error_loop),
 
+            ("CPUFailsafe",
+             "Ensure we do something appropriate when the main loop stops",
+             self.CPUFailsafe),
+
             ("Parameters",
              "Test Parameter Set/Get",
              self.test_parameters),
+
+            ("LoggerDocumentation",
+             "Test Onboard Logging Generation",
+             self.test_onboard_logging_generation),
+
+            ("GetCapabilities",
+             "Get Capabilities",
+             self.test_get_autopilot_capabilities),
         ]
 
     def post_tests_announcements(self):

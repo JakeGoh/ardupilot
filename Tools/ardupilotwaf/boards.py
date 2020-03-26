@@ -52,22 +52,14 @@ class Board:
 
             env.DEFINES.update(
                 ENABLE_SCRIPTING = 1,
-                ENABLE_HEAP = 1,
                 LUA_32BITS = 1,
                 )
-
-            env.ROMFS_FILES += [
-                ('sandbox.lua', 'libraries/AP_Scripting/scripts/sandbox.lua'),
-                ]
 
             env.AP_LIBRARIES += [
                 'AP_Scripting',
                 'AP_Scripting/lua/src',
                 ]
 
-            env.CXXFLAGS += [
-                '-DHAL_HAVE_AP_ROMFS_EMBEDDED_H'
-                ]
         else:
             cfg.options.disable_scripting = True;
 
@@ -165,6 +157,10 @@ class Board:
         if cfg.options.bootloader:
             # don't let bootloaders try and pull scripting in
             cfg.options.disable_scripting = True
+        else:
+            env.DEFINES.update(
+                ENABLE_HEAP = 1,
+            )
 
         if cfg.options.enable_math_check_indexes:
             env.CXXFLAGS += ['-DMATH_CHECK_INDEXES']
@@ -446,6 +442,7 @@ class chibios(Board):
         env.DEFINES.update(
             CONFIG_HAL_BOARD = 'HAL_BOARD_CHIBIOS',
             HAVE_STD_NULLPTR_T = 0,
+            USE_LIBC_REALLOC = 0,
         )
 
         env.AP_LIBRARIES += [
@@ -497,6 +494,8 @@ class chibios(Board):
             '--specs=nano.specs',
             '-specs=nosys.specs',
             '-DCHIBIOS_BOARD_NAME="%s"' % self.name,
+            '-D__USE_CMSIS',
+            '-Werror=deprecated-declarations'
         ]
         env.CXXFLAGS += env.CFLAGS + [
             '-fno-rtti',
@@ -556,6 +555,10 @@ class chibios(Board):
 
         env.GIT_SUBMODULES += [
             'ChibiOS',
+        ]
+
+        env.INCLUDES += [
+            cfg.srcnode.find_dir('libraries/AP_GyroFFT/CMSIS_5/include').abspath()
         ]
 
         try:

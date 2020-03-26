@@ -869,7 +869,7 @@ private:
     void update_fbwb_speed_height(void);
     void setup_turn_angle(void);
     bool reached_loiter_target(void);
-    void set_control_channels(void);
+    void set_control_channels(void) override;
     void init_rc_in();
     void init_rc_out_main();
     void init_rc_out_aux();
@@ -1040,6 +1040,8 @@ private:
 
 public:
     void failsafe_check(void);
+    bool set_target_location(const Location& target_loc) override;
+    bool get_target_location(Location& target_loc) override;
 };
 
 extern Plane plane;

@@ -368,6 +368,7 @@ struct PACKED log_MAV {
     uint16_t packet_tx_count;
     uint16_t packet_rx_success_count;
     uint16_t packet_rx_drop_count;
+    uint8_t flags;
 };
 
 struct PACKED log_RSSI {
@@ -570,7 +571,7 @@ struct PACKED log_NKF4 {
     int8_t  offsetEast;
     uint16_t faults;
     uint8_t timeouts;
-    uint16_t solution;
+    uint32_t solution;
     uint16_t gps;
     int8_t primary;
 };
@@ -1235,7 +1236,7 @@ struct PACKED log_Arm_Disarm {
     LOG_PACKET_HEADER;
     uint64_t time_us;
     uint8_t  arm_state;
-    uint16_t arm_checks;
+    uint32_t arm_checks;
     uint8_t forced;
     uint8_t method;
 };
@@ -1315,6 +1316,165 @@ struct PACKED log_Arm_Disarm {
 #define ARSP_FMT "QffcffBBfB"
 #define ARSP_UNITS "snPOPP----"
 #define ARSP_MULTS "F00B00----"
+
+// @LoggerMessage: ATT
+// @Description: Canonical vehicle attitude
+// @Field: TimeUS: microseconds since system startup
+// @Field: DesRoll: vehicle desired roll
+// @Field: Roll: achieved vehicle roll
+// @Field: DesPitch: vehicle desired pitch
+// @Field: Pitch: achieved vehicle pitch
+// @Field: DesYaw: vehicle desired yaw
+// @Field: Yaw: achieved vehicle yaw
+// @Field: ErrRP: lowest estimated gyro drift error
+// @Field: ErrYaw: difference between measured yaw and DCM yaw estimate
+
+// @LoggerMessage: BARO
+// @Description: Gathered Barometer data
+// @Field: TimeUS: microseconds since system startup
+// @Field: Alt: calculated altitude
+// @Field: Press: measured atmospheric pressure
+// @Field: Temp: measured atmospheric temperature
+// @Field: CRt: derived climb rate from primary barometer
+// @Field: SMS: time last sample was taken
+// @Field: Offset: raw adjustment of barometer altitude, zeroed on calibration, possibly set by GCS
+// @Field: GndTemp: temperature on ground, specified by parameter or measured while on ground
+// @Field: Health: true if barometer is considered healthy
+
+// @LoggerMessage: BAT
+// @Description: Gathered battery data
+// @Field: TimeUS: microseconds since system startup
+// @Field: Instance: battery instance number
+// @Field: Volt: measured voltage
+// @Field: VoltR: estimated resting voltage
+// @Field: Curr: measured current
+// @Field: CurrTot: current * time
+// @Field: EnrgTot: energy this battery has produced
+// @Field: Temp: measured temperature
+// @Field: Res: estimated temperature resistance
+
+// @LoggerMessage: FMT
+// @Description: Message defining the format of messages in this file
+// @URL: https://ardupilot.org/dev/docs/code-overview-adding-a-new-log-message.html
+// @Field: Type: unique-to-this-log identifier for message being defined
+// @Field: Length: the number of bytes taken up by this message (including all headers)
+// @Field: Name: name of the message being defined
+// @Field: Format: character string defining the C-storage-type of the fields in this message
+// @Field: Columns: the labels of the message being defined
+
+// @LoggerMessage: GPS
+// @Description: Information received from GNSS systems attached to the autopilot
+// @Field: TimeUS: microseconds since system startup
+// @Field: Status: GPS Fix type; 2D fix, 3D fix etc.
+// @Field: GMS: milliseconds since start of GPS Week
+// @Field: GWk: weeks since 5 Jan 1980
+// @Field: NSats: number of satellites visible
+// @Field: HDop: horizontal precision
+// @Field: Lat: latitude
+// @Field: Lng: longitude
+// @Field: Alt: altitude
+// @Field: Spd: speed
+// @Field: GCrs: ground course
+// @Field: VZ: vertical velocity
+// @Field: Yaw: vehicle yaw
+// @Field: U: boolean value indicating whether this GPS is in use
+
+// @LoggerMessage: MAG,MAG2,MAG3
+// @Description: Information received from compasses
+// @Field: TimeUS: microseconds since system startup
+// @Field: MagX: magnetic field strength in body frame
+// @Field: MagY: magnetic field strength in body frame
+// @Field: MagZ: magnetic field strength in body frame
+// @Field: OfsX: magnetic field offset in body frame
+// @Field: OfsY: magnetic field offset in body frame
+// @Field: OfsZ: magnetic field offset in body frame
+// @Field: MOfsX: motor interference magnetic field offset in body frame
+// @Field: MOfsY: motor interference magnetic field offset in body frame
+// @Field: MOfsZ: motor interference magnetic field offset in body frame
+// @Field: Health: true if the compass is considered healthy
+// @Field: S: time measurement was taken
+
+// @LoggerMessage: MODE
+// @Description: vehicle control mode information
+// @Field: TimeUS: microseconds since system startup
+// @Field: Mode: vehicle-specific mode number
+// @Field: ModeNum: alias for Mode
+// @Field: Rsn: reason for entering this mode; enumeration value
+
+// @LoggerMessage: PIDR,PIDP,PIDY,PIDA,PIDS
+// @Description: Proportional/Integral/Derivative gain values for Roll/Pitch/Yaw/Z/Steering
+// @Field: TimeUS: microseconds since system startup
+// @Field: Tar: desired value
+// @Field: Act: achieved value
+// @Field: Err: error between target and achieved
+// @Field: P: proportional part of PID
+// @Field: I: integral part of PID
+// @Field: D: derivative part of PID
+// @Field: FF: controller feed-forward portion of response
+
+// @LoggerMessage: RATE
+// @Description: Desired and achieved vehicle attitude rates
+// @Field: TimeUS: microseconds since system startup
+// @Field: RDes: vehicle desired roll rate
+// @Field: R: achieved vehicle roll rate
+// @Field: ROut: normalized output for Roll
+// @Field: PDes: vehicle desired pitch rate
+// @Field: P: vehicle pitch rate
+// @Field: POut: normalized output for Pitch
+// @Field: YDes: vehicle desired yaw rate
+// @Field: Y: achieved vehicle yaw rate
+// @Field: YOut: normalized output for Yaw
+// @Field: YDes: vehicle desired yaw rate
+// @Field: Y: achieved vehicle yaw rate
+// @Field: ADes: desired vehicle vertical acceleration
+// @Field: A: achieved vehicle vertical acceleration
+// @Field: AOut: percentage of vertical thrust output current being used
+
+// @LoggerMessage: RCIN
+// @Description: RC input channels to vehicle
+// @Field: TimeUS: microseconds since system startup
+// @Field: C1: channel 1 input
+// @Field: C2: channel 2 input
+// @Field: C3: channel 3 input
+// @Field: C4: channel 4 input
+// @Field: C5: channel 5 input
+// @Field: C6: channel 6 input
+// @Field: C7: channel 7 input
+// @Field: C8: channel 8 input
+// @Field: C9: channel 9 input
+// @Field: C10: channel 10 input
+// @Field: C11: channel 11 input
+// @Field: C12: channel 12 input
+// @Field: C13: channel 13 input
+// @Field: C14: channel 14 input
+
+// @LoggerMessage: RCOU
+// @Description: Servo channel output values
+// @Field: TimeUS: microseconds since system startup
+// @Field: C1: channel 1 output
+// @Field: C2: channel 2 output
+// @Field: C3: channel 3 output
+// @Field: C4: channel 4 output
+// @Field: C5: channel 5 output
+// @Field: C6: channel 6 output
+// @Field: C7: channel 7 output
+// @Field: C8: channel 8 output
+// @Field: C9: channel 9 output
+// @Field: C10: channel 10 output
+// @Field: C11: channel 11 output
+// @Field: C12: channel 12 output
+// @Field: C13: channel 13 output
+// @Field: C14: channel 14 output
+
+// @LoggerMessage: VIBE
+// @Description: Processed (acceleration) vibration information
+// @Field: TimeUS: microseconds since system startup
+// @Field: VibeX: Primary accelerometer filtered vibration, x-axis
+// @Field: VibeY: Primary accelerometer filtered vibration, y-axis
+// @Field: VibeZ: Primary accelerometer filtered vibration, z-axis
+// @Field: Clip0: Number of clipping events on 1st accelerometer
+// @Field: Clip1: Number of clipping events on 2nd accelerometer
+// @Field: Clip2: Number of clipping events on 3rd accelerometer
 
 // messages for all boards
 #define LOG_BASE_STRUCTURES \
@@ -1409,7 +1569,7 @@ struct PACKED log_Arm_Disarm {
     { LOG_NKF3_MSG, sizeof(log_NKF3), \
       "NKF3","QBcccccchhhcc","TimeUS,C,IVN,IVE,IVD,IPN,IPE,IPD,IMX,IMY,IMZ,IYAW,IVT", "s#nnnmmmGGG??", "F-BBBBBBCCCBB" }, \
     { LOG_NKF4_MSG, sizeof(log_NKF4), \
-      "NKF4","QBcccccfbbHBHHb","TimeUS,C,SV,SP,SH,SM,SVT,errRP,OFN,OFE,FS,TS,SS,GPS,PI", "s#------??-----", "F-------??-----" }, \
+      "NKF4","QBcccccfbbHBIHb","TimeUS,C,SV,SP,SH,SM,SVT,errRP,OFN,OFE,FS,TS,SS,GPS,PI", "s#------??-----", "F-------??-----" }, \
     { LOG_NKF5_MSG, sizeof(log_NKF5), \
       "NKF5","QBhhhcccCCfff","TimeUS,NI,FIX,FIY,AFI,HAGL,offset,RI,rng,Herr,eAng,eVel,ePos", "s----m???mrnm", "F----BBBBB000" }, \
     { LOG_NKF10_MSG, sizeof(log_RngBcnDebug), \
@@ -1422,7 +1582,7 @@ struct PACKED log_Arm_Disarm {
     { LOG_XKF3_MSG, sizeof(log_NKF3), \
       "XKF3","QBcccccchhhcc","TimeUS,C,IVN,IVE,IVD,IPN,IPE,IPD,IMX,IMY,IMZ,IYAW,IVT", "s#nnnmmmGGG??", "F-BBBBBBCCCBB" }, \
     { LOG_XKF4_MSG, sizeof(log_NKF4), \
-      "XKF4","QBcccccfbbHBHHb","TimeUS,C,SV,SP,SH,SM,SVT,errRP,OFN,OFE,FS,TS,SS,GPS,PI", "s#------??-----", "F-------??-----" }, \
+      "XKF4","QBcccccfbbHBIHb","TimeUS,C,SV,SP,SH,SM,SVT,errRP,OFN,OFE,FS,TS,SS,GPS,PI", "s#------??-----", "F-------??-----" }, \
     { LOG_XKF5_MSG, sizeof(log_NKF5), \
       "XKF5","QBhhhcccCCfff","TimeUS,NI,FIX,FIY,AFI,HAGL,offset,RI,rng,Herr,eAng,eVel,ePos", "s----m???mrnm", "F----BBBBB000" }, \
     { LOG_XKF10_MSG, sizeof(log_RngBcnDebug), \
@@ -1533,7 +1693,7 @@ struct PACKED log_Arm_Disarm {
     { LOG_RALLY_MSG, sizeof(log_Rally), \
       "RALY", "QBBLLh", "TimeUS,Tot,Seq,Lat,Lng,Alt", "s--DUm", "F--GGB" },  \
     { LOG_MAV_MSG, sizeof(log_MAV),   \
-      "MAV", "QBHHH",   "TimeUS,chan,txp,rxp,rxdp", "s#---", "F-000" },   \
+      "MAV", "QBHHHB",   "TimeUS,chan,txp,rxp,rxdp,flags", "s#----", "F-000-" },   \
     { LOG_VISUALODOM_MSG, sizeof(log_VisualOdom), \
       "VISO", "Qffffffff", "TimeUS,dt,AngDX,AngDY,AngDZ,PosDX,PosDY,PosDZ,conf", "ssrrrmmm-", "FF000000-" }, \
     { LOG_OPTFLOW_MSG, sizeof(log_Optflow), \
@@ -1545,7 +1705,7 @@ struct PACKED log_Arm_Disarm {
     { LOG_EVENT_MSG, sizeof(log_Event), \
       "EV",   "QB",           "TimeUS,Id", "s-", "F-" }, \
     { LOG_ARM_DISARM_MSG, sizeof(log_Arm_Disarm), \
-      "ARM", "QBHBB", "TimeUS,ArmState,ArmChecks,Forced,Method", "s----", "F----" }, \
+      "ARM", "QBIBB", "TimeUS,ArmState,ArmChecks,Forced,Method", "s----", "F----" }, \
     { LOG_ERROR_MSG, sizeof(log_Error), \
       "ERR",   "QBB",         "TimeUS,Subsys,ECode", "s--", "F--" }
 
